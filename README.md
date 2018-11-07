@@ -112,7 +112,7 @@ After simulation, several files are created:
 | `out_data`      | the main output file containing the simulation results, which can be read by Mathematica                                                |
 
 
-`out_data` is actually an [Assocation](https://reference.wolfram.com/language/guide/Associations.html), which can be read in Mathematica...
+`out_data` is actually an [Assocation](https://reference.wolfram.com/language/guide/Associations.html), which can be read in Mathematica via
 ```Mathematica
 data = Get["out_data"]
 ````
@@ -124,7 +124,7 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 | `trotterFidelityEvo`     | fidelity of the wavefunctions produced by Trotter's method against the true evolution                                                                                                        |
 | `energyEvo`              | energy of the wavefunctions produced by Li's method according to `SIM_HAMIL_FN`. This is ideally constant when simulation is accurate                                                        |
 | `paramsEvos`             | values of every parameter at each iteration of Li's method                                                                                                                                   |
-| `trotterAngleEvos        | values of the parameters that Trotter's method assigns to the gates to produce each iteration's wavefunction                                                                                 |
+| `trotterAngleEvos`        | values of the parameters that Trotter's method assigns to the gates to produce each iteration's wavefunction                                                                                 |
 | `residualEvo`            | the values of the residuals (norm for Tikhonov, sum of squares for TSVD) reported by GSL when solving the linear equations which update the parameters. This should grow as fidelity worsens |
 | `hamilSpectrum`          | energy eigenvalues of `SIM_HAMIL_FN`                                                                                                                                                         |
 
@@ -133,11 +133,79 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 
 ## Recompiler
 
-### Usage
+`recompiler.c` takes a target wavefunction (produced by some parameters in some ansatz acting on some input state) and attempts to find parameters for a new ansatz which approximates that wavefunction. As input, we take a fictitious "recompilation" Hamiltonian which has the input state as its ground state, the old ansatz and its assigned parameters, and the new ansatz. The code then emulates the process of using variational imaginary time simulation to evolve the new ansatz parameters, such that the produced state approaches the target state. After many iterations, the new ansatz should reproduce the target state, and so be used in place of the input ansatz to generate that state. This is useful when the new ansatz is easier to implement (on quantum hardware) than the original ansatz, i.e. by being shorter, less sophisticated, or more robust to noise. It may even be useful for checkpointing dynamical simulation, by periodically compressing the flexible ansatz circuits into shorter ones only good for generating the current wavefunction, and extending them with more flexible gates (e.g. Trotter cycles).
+
+`recompiler.c` can utilise an optional *luring* subroutine, whereby an intermediate states are targeted (by slowly activating the old ansatz parameters) before the ultimate target wavefunction. This can slow the convergence rate of the new parameters, but increases their robustness in reaching their optima.
 
 ### How it works
 
+We accept an input state which is known to be the groundstate of our recompilation Hamiltonian. We also accept an old circuit which acts on the input state to produce the target state, which we desire a new ansatz to reproduce. Finding parameters of the new ansatz which, when acting on the input state, produce the target state is a problem we recast to one of energy minimisation: we seek new parameters which produce the lowest energy state in a modified circuit, namely the inverse of the new ansatz appended to the old ansatz.
+
+We drive toward such a state using variational imaginary time evolution, which monotonically decreases the parameterised state's energy. Our numerical emulation of imaginary time evolution is nearly identical to that for realtime Li simulation. When energy has stabilised and is near to the known ground state, we can reverse the new ansatz and negate its final parameters to produce the target state from the input state. 
+
+If convergence halted before the ground state was reached, we may employ luring. Before simulation, we scale down the old ansatz parameters, shifting that unitary "towards identity" and the state it produces toward the input state. This is an easier intermediate target state for the new ansatz to "reverse engineer" since it means the initial new state (identity acting on the old ansatz) is closer to ground. We can now perform imaginary time simulation and once reaching a sufficiently low energy, scale the old ansatz parameters toward their ultimate total values, raising the energy. We can repeat this to incrementally *lure* the new ansatz parameters toward their optima.
+
+### Usage
+
+After compiling with
+```bash
+make -f makefile_recompiler
+```
+the recompiler is run by suppling command line arguments
+```bash
+./recompiler old_ansatz old_params new_ansatz new_init_params true_state new_final_params out_data lures threshold
+````
+where
+
+| argument      | explanation    |
+|---------------|----------------|
+|`old_ansatz`	| filename of the original ansatz circuit |
+|`old_params`	| filename of the original ansatz parameters |
+|`new_ansatz`	| filename of the new (recompiled) ansatz circuit |
+|`new_init_params`	| filename of the inital values of the new ansatz circuit (typically ~0) |
+|`true_state`	| filename of a wavefunction which will be compared to the state produced by the new ansatz, for fidelity logging purposes. This is typically the *true* future state of some realtime simulation, of which the old ansatz is an approximation |
+| `new_final_params`	| filename to which to write the final new ansatz parameters. These are the parameters which, when utilised by the new ansatz, transform the input state into the target state (that produced by the old ansatz given the old parameters). This file is in the input parameter format |
+| `out_data` | filename to which to write the simulation data, readable by Mathematica as an Association |
+| `lures` | the number of intermediate *luring* states to target before targeting the ultimate old ansatz parameters. This can be `0` to perform no luring |
+| `threshold` | only used when `lures > 0`, where it decides at what distance from ground state an intermediate luring stage is considered complete and the old parameters incremented toward their ultimate values |
+
+There are some additional constants in `recompiler.c`:
+
+| constant                     | explanation                                                                                                                                                                                                                             |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `RECOMP_HAMIL_FN`            | filename of the input recompilation Hamiltonian whose groundstate is the input state to the old ansatz                                                                                                                                  |
+| `IMAG_EVO_TIME_STEP`         | the timestep of the imaginary time simulation, performed with an imaginary adaptation of Li's algorithm                                                                                                                                 |
+| `IMAG_EVO_NUM_ITERS`         | the number of iterations of variational imaginary time evolution to perform                                                                                                                                                             |
+| `IMAG_EVO_INIT_TARGET_PARAM` | only used if `lures > 0` in which case it is the initial value of the old ansatz parameters. This must be kept very small but non-zero, since exactly zero initial parameters makes the first iteration's linear equations undetermined |
+
+and a single constant in `paramevolver.c`: `IMAG_SOLVER_METHOD` which sets whether to use TSVD (`=0`) or Tikhonov regularisation (`=1`) when solving the linear equations in Li's algorithm each iteration. We find TSVD offers the most rapid and reliable convergence to the ground state.
+
+
 ### Output
+
+After recompilation, several files are created:
+
+| filename | explanation |
+|----------|-------------|
+| `new_final_params` | contains the final values of the new params after imaginary time simulation (in the input param format). These should be reversed and negated, and the new ansatz reversed, in order to apply them to reproduce the target state |
+| `out_data` | the main output file containing the simulation results, which can be read by Mathematica |
+
+`out_data` is actually an [Assocation](https://reference.wolfram.com/language/guide/Associations.html), which can be read in Mathematica via
+```Mathematica
+data = Get["out_data"]
+````
+and which contains the following keys (accessible by `data["key"]`, and reported by `Keys @ data`):
+
+| key | explanation |
+|-----|-------------|
+| `newParamEvos` | values of every new parameter at each iteration of imaginary time simulation |
+| `fidelityWithFinalEvo` | fidelity of the old ansatz state against the new ansatz state. This should increase with imaginary time iterations |
+| `energyWithFinalEvo` | the energy of the state produced by applying the old ansatz then the inverse of the new ansatz. This should approach the groundstate of `RECMOP_HAMIL_FN` |
+| `retargetIters` | populated if `lures>0`, in which case it is a list of iterations where the target state was adjusted because the current energy dropped below `threshold` |
+| `fidelityWithTargetEvo` | populated if `lures>0`, where it's the fidelity between the new ansatz state and the current target state which gradually transforms from the input state to the old ansatz state |
+| `energyWithTargetEvo` | populated if `lures>0`, where it's the energy of the state produced by applying the inverse of the new ansatz state to the target state. This is the energy which controls the lure |
+| `fidelityWithTrueEvo` | the fidelity of the new ansatz state with `true_state` |
+|`hamilSpectrum`| energy eigenvalues of `RECOMP_HAMIL_FN` |
 
 ------------------------------------------------------------------------------------------------
 
