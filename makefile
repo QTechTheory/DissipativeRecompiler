@@ -1,9 +1,6 @@
 
-# This makefile builds the QuEST library and links/compiles user code
-# While attempting to accomodate as many platforms and compilers,
-# unforeseen problems are inevitable: please email anna.brown@oerc.ox.ac.uk
-# or tyson.jones@materials.ox.ac.uk about any errors or complications, or 
-# raise an issue on Github
+# pass argument TARGET, which is by default, simulator
+TARGET = simulator
 
 #======================================================================#
 #                                                                      #
@@ -12,10 +9,10 @@
 #======================================================================#
 
 # name of the executable to create
-EXE = simulator
+EXE = $(TARGET)
 
 # space-separated names (no file type) of all user source files (.c or .cpp) in the root directory
-SOURCES = simulator mmaformatter circuitloader hamiltonianloader paramevolver trueevolver trotterevolver utilities
+SOURCES = $(TARGET) mmaformatter circuitloader hamiltonianloader paramevolver trueevolver trotterevolver utilities
 
 # path to QuEST library from root directory
 QUEST_DIR = QuEST

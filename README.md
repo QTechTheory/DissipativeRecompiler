@@ -54,7 +54,7 @@ Meanwhile, `trotterevolver.c` accepts a fixed-length Trotter circuit and chooses
 
 After compiling with
 ```bash
-make -f makefile_simulator
+make TARGET=simulator
 ```
 the simulator is run by suppling command line arguments
 ```bash
@@ -143,7 +143,7 @@ If convergence halted before the ground state was reached, we may employ luring.
 
 After compiling with
 ```bash
-make -f makefile_recompiler
+make TARGET=recompiler
 ```
 the recompiler is run by suppling command line arguments
 ```bash
@@ -221,7 +221,7 @@ We choose to halt as soon as this energy threshold is reached, restore the param
 
 After compiling with
 ```bash
-make -f makefile_eliminator
+make TARGET=eliminator
 ```
 the eliminator is run by suppling command line arguments
 ```bash
