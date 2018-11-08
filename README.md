@@ -1,14 +1,12 @@
 DissipativeRecompiler
 =====================
 
-> **This README is a work in progress!**
-
 **Table of Contents**
   - [Overview](#overview)
   - [Simulator](#simulator)
   - [Recompiler](#recompiler)
   - [Eliminator](#eliminator)
-  - [Demonstration](#demonstration)
+  - [Demo](#demo)
 
 ------------------------------------------------------------------------------------------------
 
@@ -32,12 +30,14 @@ The repository also includes a copy of [QuEST](https://quest.qtechtheory.org/) f
 - `utilities.c` containing simple array and file parsing utilities
 - `mmaformatter.c` used to write arrays to files readable by Mathematica
 
+While below we explain how to use each of these 3 executables, users may find it easier to write their own code utilising the above libraries. See the [demo](#demo) for a simple example.
+
 ------------------------------------------------------------------------------------------------
 
 
 ## Simulator
 
-`simulator.c` emulates realtime simulation using Li's variational algorithm, and compares its performance to simulation via the Trotter method and direct unitary time evolution. As input, we take a Hamiltonian which is a weighted sum of Pauli operators, some parameterised circuit, and some starting wavefunction.
+[`simulator.c`](simulator.c) emulates realtime simulation using Li's variational algorithm, and compares its performance to simulation via the Trotter method and direct unitary time evolution. As input, we take a Hamiltonian which is a weighted sum of Pauli operators, some parameterised circuit, and some starting wavefunction.
 Li's algorithm then finds parameters which produce wavefunctions which approximate future evolution states of the starting wavefunction under the Hamiltonian.
 
 ### How it works
@@ -127,7 +127,7 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 
 ## Recompiler
 
-`recompiler.c` takes a target wavefunction (produced by some parameters in some ansatz acting on some input state) and attempts to find parameters for a new ansatz which approximates that wavefunction. As input, we take a fictitious "recompilation" Hamiltonian which has the input state as its ground state, the old ansatz and its assigned parameters, and the new ansatz. The code then emulates the process of using variational imaginary time simulation to evolve the new ansatz parameters, such that the produced state approaches the target state. After many iterations, the new ansatz should reproduce the target state, and so be used in place of the input ansatz to generate that state. This is useful when the new ansatz is easier to implement (on quantum hardware) than the original ansatz, i.e. by being shorter, less sophisticated, or more robust to noise. It may even be useful for checkpointing dynamical simulation, by periodically compressing the flexible ansatz circuits into shorter ones only good for generating the current wavefunction, and extending them with more flexible gates (e.g. Trotter cycles).
+[`recompiler.c`](recompiler.c) takes a target wavefunction (produced by some parameters in some ansatz acting on some input state) and attempts to find parameters for a new ansatz which approximates that wavefunction. As input, we take a fictitious "recompilation" Hamiltonian which has the input state as its ground state, the old ansatz and its assigned parameters, and the new ansatz. The code then emulates the process of using variational imaginary time simulation to evolve the new ansatz parameters, such that the produced state approaches the target state. After many iterations, the new ansatz should reproduce the target state, and so be used in place of the input ansatz to generate that state. This is useful when the new ansatz is easier to implement (on quantum hardware) than the original ansatz, i.e. by being shorter, less sophisticated, or more robust to noise. It may even be useful for checkpointing dynamical simulation, by periodically compressing the flexible ansatz circuits into shorter ones only good for generating the current wavefunction, and extending them with more flexible gates (e.g. Trotter cycles).
 
 `recompiler.c` can utilise an optional *luring* subroutine, whereby an intermediate states are targeted (by slowly activating the old ansatz parameters) before the ultimate target wavefunction. This can slow the convergence rate of the new parameters, but increases their robustness in reaching their optima.
 
@@ -205,7 +205,7 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 
 ## Eliminator
 
-`eliminator.c` can be performed after using `recompiler.c` to further shrink the new ansatz. It selectively changes some gate parameters to be zero at a small cost in the new ansatz's ability to reproduce the target state. Gates with zero parameters (which effect the identity) can then be removed from the circuit. The maximum acceptable loss of fidelity, as monitored by the energy increase, decides how many gates can be removed.
+[`eliminator.c`](eliminator.c) can be performed after using `recompiler.c` to further shrink the new ansatz. It selectively changes some gate parameters to be zero at a small cost in the new ansatz's ability to reproduce the target state. Gates with zero parameters (which effect the identity) can then be removed from the circuit. The maximum acceptable loss of fidelity, as monitored by the energy increase, decides how many gates can be removed.
 
 ### How it works
 
@@ -280,8 +280,17 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 
 ------------------------------------------------------------------------------------------------
 
-## Demonstration
+## Demo
 
+[`demo.c`](demo.c) is a simple demonstration of using this code base to simulate Li's realtime algorithm, and perform dissipative recompilation on the reached state. This mimics the protocol performed in the paper on the 7-qubit spin system, albeit without luring and gate elimination.
 
+After compiling with
+```bash
+make TARGET=demo
+```
+simply run the demo
+```bash
+./demo
+````
 
 
