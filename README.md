@@ -205,11 +205,78 @@ and which contains the following keys (accessible by `data["key"]`, and reported
 
 ## Eliminator
 
-### Usage
+`eliminator.c` can be performed after using `recompiler.c` to further shrink the new ansatz. It selectively changes some gate parameters to be zero at a small cost in the new ansatz's ability to reproduce the target state. Gates with zero parameters (which effect the identity) can then be removed from the circuit. The maximum acceptable loss of fidelity, as monitored by the energy increase, decides how many gates can be removed.
 
 ### How it works
 
+`eliminator.c` works just like `recompiler.c`: variational imaginary time simulation drives the system toward the groundstate of a fictitious Hamiltonian, so that the new ansatz parameters approach values which reproduce the target state (that produced by the old ansatz). However, the parameter evolution equations have additional constraints.
+
+We pick the smallest magnitude parameter in the new ansatz, and constrain the evolution equations such that this parameter approaches 0. This is as simple as reformulating *A x = b* to *A' x = b - col(A)* where a column of A (corresponding to the constrained parameter) has been populated with the chosen value and moved to the RHS. Our forced change in a parameter will increase the energy. Imaginary time simulation will then optimise the unconstrained parameters so as to return the system to ground state, or as close as can be reached. Instead of constraining the selected parameter change immediately to zero, we can bound its maximum change each iteration to slowly excite the attemptedly cooled state in an analog to *luring*.
+Since we numerically constrain the selected parameter, we can force it to become precisely 0. Thereafter, we constrain that parameter to remain 0 for all future evolution, and choose the next smallest magnitude parameter to eliminate.
+We can continue repeating this, eliminating gates one by one, until the energy rises above some pre-set threshold.
+
+We choose to halt as soon as this energy threshold is reached, restore the parameters before that particular 'failed elimination', and exit. In theory, this energy check could be performed strictly after the parameter has become 0, or elimination re-attempted on another parameter, to eliminate additional gates. We expect this gives little reward since energy is seen to monotonically increase during gate elimination.
+
+### Usage
+
+After compiling with
+```bash
+make -f makefile_eliminator
+```
+the eliminator is run by suppling command line arguments
+```bash
+./eliminator old_ansatz old_params new_ansatz new_init_params true_state new_final_params out_data
+````
+where
+
+| argument      | explanation    |
+|---------------|----------------|
+|`old_ansatz`	| filename of the original ansatz circuit |
+|`old_params`	| filename of the original ansatz parameters |
+|`new_ansatz`	| filename of the new (recompiled) ansatz circuit, to be further cmopressed |
+|`new_init_params`	| filename of the current values of the new ansatz circuit which approximate the target state (old ansatz with old params). Some of these values are to become 0, and the rest likely modified |
+|`true_state`	| filename of a wavefunction which will be compared to the state produced by the new ansatz, for fidelity logging purposes. This is typically the *true* future state of some realtime simulation, of which the old ansatz is an approximation |
+| `new_final_params`	| filename to which to write the final new ansatz parameters, some of which will be exactly zero (having been eliminated). These are the parameters which, when utilised by the new ansatz, transform the input state into the target state (that produced by the old ansatz given the old parameters). This file is in the input parameter format |
+| `out_data` | filename to which to write the simulation data, readable by Mathematica as an Association |
+
+There are some additional constants in `eliminator.c`:
+
+| constant                     | explanation                                                                                                                                                                                                                             |
+|------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `RECOMP_HAMIL_FN`            | filename of the input recompilation Hamiltonian whose groundstate is the input state to the old ansatz                                                                                                                                  |
+| `IMAG_EVO_TIME_STEP`         | the timestep of the imaginary time simulation, performed with an imaginary adaptation of Li's algorithm                                                                                                                                 |
+| `IMAG_SOLVER_METHOD` | whether to use TSVD (`=0`) or Tikhonov regularisation (`=1`) when solving the linear equations in the imaginary-time adaptation Li's algorithm each iteration. We recommend TSVD. |
+| `ELIM_PARAM_MAX` | the maximum magnitude a parameter may have and still be considered "eliminated". While this must be smaller than the initial values of the to-be-eliminated parameters, its specific value is of little importance since the parameters can be constrained to become exactly 0 (within machine epsilon) |
+| `PARAM_CHANGE_MAX` | the maximum change a to-be-eliminated parameter may experience in a single iteration, to force the elimination process to happen slowly and smoothly. This means a parameter `p` takes `ceiling(abs(p) / PARAM_CHANGE_MAX)` iterations to be eliminated. |
+| `ENERGY_INCREASE_TOL_FAC` | a multiple of the original gap between true ground state and the energy of the state produced by the new ansatz's initial parameters. When the energy reaches this multiplied by the original gap, the energy is considered to have risen unacceptably and the elimination subroutine is terminated. |
+| `MAX_TOTAL_ITERS` | merely a bound on the total number of elimination iterations which can be performed, for memory purposes |
+
 ### Output
+
+After elimination, two files are created:
+
+| filename | explanation |
+|----------|-------------|
+| `new_final_params` | contains the final values of the new params after elimination, some of which are exactly 0. These should be reversed and negated, the new ansatz reversed and its 0-param gates removed, in order to reproduce the target state |
+| `out_data` | the main output file containing the simulation results, which can be read by Mathematica |
+
+`out_data` is actually an [Assocation](https://reference.wolfram.com/language/guide/Associations.html), which can be read in Mathematica via
+```Mathematica
+data = Get["out_data"]
+````
+and which contains the following keys (accessible by `data["key"]`, and reported by `Keys @ data`):
+
+| key | explanation |
+|-----|-------------|
+| `origDist` | the distance of the original state (inverse new ansatz applied to old ansatz) from true ground |
+| `totalIters` | the total number of imaginary-time iterations performed before the energy rose above `ENERGY_INCREASE_TOL_FAC * origDist - groundstate` and elimination was terminated |
+| `totalParamChanges` | the total number of parameters eliminated, i.e. set exactly to 0 |
+| `itersOfParamChanges` | the imaginary-time iterations after which a parameter was eliminated |
+| `indsOfParamChanges` | the indices of the eliminated parameters (with respect to `new_init_params`) in order of their elimination time |
+| `paramsEvo` | the value of every new parameter at every iteration |
+| `energyEvo` | the energy of the parameterised state (inverse new ansatz applied to old ansatz) at every iteration |
+| `fidelityInitEvo` | the fidelity between states created by the new ansatz and the old ansatz, at every iteration |
+| `fidelityTrueEvo` | the fidelity between the state created by the new ansatz and `true_state` |
 
 ------------------------------------------------------------------------------------------------
 
