@@ -12,7 +12,7 @@ DissipativeRecompiler
 
 ## Overview
 
-This repository contains C code for 3 executables.
+This repository contains C code for 3 executables, used by [this arXiv paper](https://arxiv.org/abs/1811.03147).
 
 - `simulator.c` which emulates real-time simulation using the [Li method](https://journals.aps.org/prx/abstract/10.1103/PhysRevX.7.021050), Trotter method, and direct Hamiltonian exponentiation.
 - `recompiler.c` which uses [imaginary-time simulation](https://arxiv.org/abs/1804.03023) to recompile one quantum circuit into another.
@@ -31,6 +31,14 @@ The repository also includes a copy of [QuEST](https://quest.qtechtheory.org/) f
 - `mmaformatter.c` used to write arrays to files readable by Mathematica
 
 While below we explain how to use each of these 3 executables, users may find it easier to write their own code utilising the above libraries. See the [demo](#demo) for a simple example.
+
+Users are welcome to modify and re-apply the code and are invited to cite
+> T. Jones and S. Benjamin,
+>
+> *Quantum compilation and circuit optimisation via energy dissipation*
+>
+> arXiv: 1811.03147 (2018)
+
 
 ------------------------------------------------------------------------------------------------
 
