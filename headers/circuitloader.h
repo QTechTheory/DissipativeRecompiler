@@ -30,6 +30,10 @@ void applyRandomisedCircuit(Circuit circuit, double* params, QubitRegister qureg
 
 void applyInverseCircuit(Circuit circuit, double* params, QubitRegister qureg);
 
+void applyOrderedCircuit(Circuit circuit, double* params, int* ordering, QubitRegister qureg);
+
+void applyReversedOrderedCircuit(Circuit circuit, double* params, int* ordering, QubitRegister qureg);
+
 void applyGate(Circuit circuit, int gateNum, QubitRegister qureg);
 
 void freeCircuit(Circuit circuit);

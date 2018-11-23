@@ -211,9 +211,9 @@ void freeCircuit(Circuit circuit) {
 }
 
 /**
- * mode: 0=forward, 1=backward, 2=random
+ * mode: 0=forward, 1=backward, 2=random, 3=inverse, 4=ordered, 5=backward ordered
  */
-void applyCircuitInner(Circuit circuit, double* params, QubitRegister qureg, const int mode) {
+void applyCircuitInner(Circuit circuit, double* params, QubitRegister qureg, const int mode, int* ordering) {
     
     int gateWasApplied[circuit.numGates];
     for (int g=0; g < circuit.numGates; g++)
@@ -233,6 +233,10 @@ void applyCircuitInner(Circuit circuit, double* params, QubitRegister qureg, con
             while (gateWasApplied[g]) g = (g + 1) % circuit.numGates;
             gateWasApplied[g] = 1;
         }
+        else if (mode == 4)
+            g = ordering[t];
+        else if (mode == 5)
+            g = ordering[circuit.numGates - 1 - t];
         else {
             printf(
                 "INTERNAL ERROR: unrecognised mode %d passed to applyCircuitInner! Exiting...\n",
@@ -244,6 +248,8 @@ void applyCircuitInner(Circuit circuit, double* params, QubitRegister qureg, con
         int qb1 = circuit.gateFirstQubits[g];
         int qb2 = circuit.gateSecondQubits[g];
         double param = params[g];
+        
+        // reverse the param to apply the inverse
         if (mode == 3)
             param *= -1;
         
@@ -300,22 +306,32 @@ void applyCircuitInner(Circuit circuit, double* params, QubitRegister qureg, con
 
 void applyCircuit(Circuit circuit, double* params, QubitRegister qureg) {
     
-    applyCircuitInner(circuit, params, qureg, 0);
+    applyCircuitInner(circuit, params, qureg, 0, NULL);
 }
 
 void applyReversedCircuit(Circuit circuit, double* params, QubitRegister qureg) {
     
-    applyCircuitInner(circuit, params, qureg, 1);
+    applyCircuitInner(circuit, params, qureg, 1, NULL);
 }
 
 void applyRandomisedCircuit(Circuit circuit, double* params, QubitRegister qureg) {
     
-    applyCircuitInner(circuit, params, qureg, 2);
+    applyCircuitInner(circuit, params, qureg, 2, NULL);
 }
 
 void applyInverseCircuit(Circuit circuit, double* params, QubitRegister qureg) {
     
-    applyCircuitInner(circuit, params, qureg, 3);
+    applyCircuitInner(circuit, params, qureg, 3, NULL);
+}
+
+void applyOrderedCircuit(Circuit circuit, double* params, int* ordering, QubitRegister qureg) {
+    
+    applyCircuitInner(circuit, params, qureg, 4, ordering);
+}
+
+void applyReversedOrderedCircuit(Circuit circuit, double* params, int* ordering, QubitRegister qureg) {
+
+    applyCircuitInner(circuit, params, qureg, 5, ordering);
 }
 
 
